@@ -1,0 +1,17 @@
+version: '3'
+services:
+  maven:
+    build: ./maven
+    volumes:
+      - ./static:/static
+    working_dir: /static
+  test:
+    build:
+      context: .
+      dockerfile: test/Dockerfile
+      args:
+        BASE_IMG: $BASE_IMG
+        USER_ID: $USER_ID
+        GROUP_ID: $GROUP_ID
+    environment:
+      POSTGIS_VERSION: $POSTGIS_VERSION

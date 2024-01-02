@@ -1,0 +1,13 @@
+version: '3'
+services:
+  maven:
+    build: ./maven
+    volumes:
+      - ./static:/static
+    working_dir: /static
+  crawler:
+    build: ./crawler
+    volumes:
+      - ./static:/static/maven
+    working_dir: /static
+    user: $USER
