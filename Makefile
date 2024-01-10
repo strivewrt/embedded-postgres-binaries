@@ -102,3 +102,17 @@ alpine/jar/%: alpine/postgres/%
 	$(eval OUT := $(CURDIR)/static/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64-alpine/$(@F))
 	mkdir -p $(OUT)
 	docker run --rm -u $(shell id -u):$(shell id -g) -v $(OUT):/out $(call img_of, alpine, $(@F))
+
+define \n
+
+
+endef
+
+Dockerfile: $(shell find static -type f) Makefile
+	echo FROM scratch > $(@)
+	$(foreach f, $(shell find static -type f | sort -nr), echo COPY $(f) $(f:static/%=/%) >> $(@)$(\n))
+
+.PHONY: latest
+latest: Dockerfile
+	docker build -t $(IMG):latest .
+	docker push $(IMG):latest

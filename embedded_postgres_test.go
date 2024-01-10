@@ -1,17 +1,45 @@
 package test
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/require"
 )
+
+const (
+	registry   = "docker.io"
+	repository = "strivewrt/embedded-postgres-binaries"
+	tag        = "alpine-12.15.0-1e29bb60614490b076fb6621228c3131"
+)
+
+func TestPullFile(t *testing.T) {
+	ref, err := name.ParseReference(registry + "/" + repository + ":" + tag)
+	require.NoError(t, err)
+	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	require.NoError(t, err)
+	layers, err := img.Layers()
+	require.NoError(t, err)
+	require.NotNil(t, layers)
+	uc, err := layers[len(layers)-1].Uncompressed()
+	require.NoError(t, err)
+	f, err := tar.NewReader(uc).Next()
+	require.NoError(t, err)
+	require.NotNil(t, f)
+	require.True(t, strings.HasSuffix(f.Name, ".jar"))
+}
 
 func randomPort(t *testing.T) uint32 {
 	t.Helper()
