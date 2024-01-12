@@ -1,0 +1,23 @@
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+    make:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v2
+        - name: Login to Docker Hub
+          uses: docker/login-action@v3
+          with:
+            username: strivewrt
+            password: ${{secrets.DOCKERHUB_TOKEN}}
+        - name: Query Versions
+          run: make versions
+        - name: Build, Test, Publish
+          run: |
+            git config --global user.email gh-pages@strivewrt
+            git config --global user.name gh-pages
+            git config --global url."https://${{secrets.GH_PAGES_TOKEN}}@github.com/".insteadOf "https://github.com/"                                                                                                       
+            make build test publish

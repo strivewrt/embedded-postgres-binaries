@@ -4,37 +4,46 @@ IMG := docker.io/strivewrt/embedded-postgres-binaries
 build: debian alpine
 
 .PHONY: publish
-publish: static/index.html
+publish: latest
+	docker push $(IMG):latest
 	cd static && \
 		git init && \
 		git checkout -b gh-pages && \
 		git remote add origin $(shell git remote -v | grep push | awk '{print $$2}') && \
 		git add -A && \
 		git commit -m $(@) && \
-		git push -f origin HEAD
+		git push -f origin HEAD \
+		&& rm -rf static/.git
 
-static/index.html: Makefile $(foreach, d, alpine debian crawler maven, $(shell find $(d) -type f))
+static/index.html: build
 	USER=$(shell id -u):$(shell id -g) \
 		docker compose -f static.yml up --build --force-recreate --abort-on-container-exit --exit-code-from crawler
+	docker compose -f test.yml down --remove-orphans --volumes
 
 .PHONY: test
-test: build test/debian test/alpine
+test: test/debian test/alpine
 
 .PHONY: test/debian
-test/debian:
-	$(MAKE) docker-compose-test BASE_IMG=golang:1.21
+test/debian: docker-compose-test/debian
 
 .PHONY: test/alpine
-test/alpine:
-	$(MAKE) docker-compose-test BASE_IMG=golang:1.21-alpine
+test/alpine: BASE_IMG := -alpine
+test/alpine: docker-compose-test/alpine
 
-.PHONY: docker-compose-test
-docker-compose-test:
+IMG_CACHE := .cache/$(shell printf $(IMG):latest | sha256sum | cut -d' ' -f1).img
+$(IMG_CACHE): latest
+	mkdir -p .cache
+	docker save $(IMG):latest > $(@)
+
+.PHONY: docker-compose-test/%
+docker-compose-test/%: $(IMG_CACHE)
 	USER_ID=$(shell id -u) \
 	GROUP_ID=$(shell id -g) \
-	BASE_IMG=$(BASE_IMG) \
-	POSTGIS_VERSION=3.3.5 \
+	BASE_IMG=golang:1.21$(BASE_IMG) \
+	IMG_CACHE=$(shell basename $(IMG_CACHE)) \
+	POSTGIS_VERSION=3.3.4 \
 		docker compose -f test.yml up --build --force-recreate --abort-on-container-exit --exit-code-from test
+	docker compose -f test.yml down --remove-orphans --volumes
 
 # postgres <= v11 is EOL by POSTGIS
 # https://trac.osgeo.org/postgis/wiki/UsersWikiPostgreSQLPostGIS
@@ -108,11 +117,14 @@ define \n
 
 endef
 
-Dockerfile: $(shell find static -type f) Makefile
+.PHONY: Dockerfile
+Dockerfile: static/index.html
 	echo FROM scratch > $(@)
-	$(foreach f, $(shell find static -type f | sort -nr), echo COPY $(f) $(f:static/%=/%) >> $(@)$(\n))
+	for f in $$(find static -type f | sort -nr); \
+ 	do \
+ 	  printf 'COPY %s %s\n' $$f $$(echo $$f | sed 's!^static!!') >> $(@); \
+ 	done
 
 .PHONY: latest
 latest: Dockerfile
 	docker build -t $(IMG):latest .
-	docker push $(IMG):latest

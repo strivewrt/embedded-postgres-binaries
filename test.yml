@@ -15,3 +15,5 @@ services:
         GROUP_ID: $GROUP_ID
     environment:
       POSTGIS_VERSION: $POSTGIS_VERSION
+    volumes:
+      - .cache/$IMG_CACHE:/home/postgres/.cache/embedded-postgres-binaries/$IMG_CACHE

@@ -3,13 +3,17 @@ package srv
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path"
+	"sync"
 
 	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -41,8 +45,40 @@ func tryDocker(ref name.Reference) (v1.Image, error) {
 	return daemon.Image(ref, daemon.WithClient(dc))
 }
 
+var mu = sync.RWMutex{}
+
 func tryRemote(ref name.Reference) (v1.Image, error) {
-	return remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	cachePath := os.Getenv("XDG_CACHE_HOME")
+	if cachePath == "" {
+		cachePath = path.Join(os.Getenv("HOME"), ".cache", "embedded-postgres-binaries")
+	}
+	sha := sha256.New()
+	uri := ref.String()
+	sha.Write([]byte(uri))
+	file := path.Join(cachePath, hex.EncodeToString(sha.Sum(nil))+".img")
+	mu.RLock()
+	if img, err := tarball.ImageFromPath(file, nil); err == nil {
+		mu.RUnlock()
+		return img, nil
+	}
+	mu.RUnlock()
+	mu.Lock()
+	defer mu.Unlock()
+	// someone else may have populated the cache while we were waiting for the write lock
+	if img, err := tarball.ImageFromPath(file, nil); err == nil {
+		return img, nil
+	}
+	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	if err != nil {
+		return nil, err
+	}
+	if err := tarball.WriteToFile(file, ref, img); err != nil {
+		// We have fetched a valid image at this point, failure here indicates a problem with the cache
+		// which we will re-attempt to populate on the next run. Right call seems to be to return the
+		// image we have and allow the request to proceed.
+		_ = err
+	}
+	return img, nil
 }
 
 // ResolveImage returns a v1.Image from the given uri.

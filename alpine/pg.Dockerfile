@@ -1,4 +1,5 @@
-FROM docker.io/strivewrt/embedded-postgres-binaries:alpine-base as base
+ARG FROM
+FROM $FROM as base
 
 ARG PG_VERSION
 # upstream postgres omits patch if .0
@@ -30,8 +31,8 @@ RUN mkdir -p /usr/src/postgresql \
     && make -j$(nproc) world \
     && make install-world
 
-# 3.3.x supports pg 12-16, 3.3.5 is latest at this time
-ARG POSTGIS_VERSION=3.3.5
+# 3.3.x supports pg 12-16
+ARG POSTGIS_VERSION=3.3.4
 RUN mkdir -p /usr/src/postgis \
     && curl -sL "https://postgis.net/stuff/postgis-$POSTGIS_VERSION.tar.gz" \
         | tar -xzf - -C /usr/src/postgis --strip-components 1 \
