@@ -30,7 +30,8 @@ RUN mkdir -p /usr/src/postgresql \
     && make -C contrib install
 
 # 3.3.x supports pg 12-16
-ARG POSTGIS_VERSION=3.3.4
+ARG POSTGIS_VERSION
+ENV LD_LIBRARY_PATH=/usr/local/pg-build/lib
 RUN mkdir -p /usr/src/postgis \
     && curl -sL "https://postgis.net/stuff/postgis-$POSTGIS_VERSION.tar.gz" \
         | tar -xzf - -C /usr/src/postgis --strip-components 1 \

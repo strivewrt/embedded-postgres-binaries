@@ -1,4 +1,12 @@
 IMG := docker.io/strivewrt/embedded-postgres-binaries
+DEPS :=  \
+	CONF_VERSION=HEAD \
+	GDAL_VERSION=2.4.1 \
+    GEOS_VERSION=3.12.1 \
+    PATCHELF_VERSION=0.9 \
+    POSTGIS_VERSION=3.3.4 \
+    PROJ_DATUMGRID_VERSION=1.8 \
+    PROJ_VERSION=6.1.0
 
 .PHONY: build
 build: debian alpine
@@ -16,7 +24,7 @@ publish: latest
 		&& rm -rf static/.git
 
 static/index.html: build
-	USER=$(shell id -u):$(shell id -g) \
+	$(DEPS) USER=$(shell id -u):$(shell id -g) \
 		docker compose -f static.yml up --build --force-recreate --abort-on-container-exit --exit-code-from crawler
 	docker compose -f test.yml down --remove-orphans --volumes
 
@@ -37,11 +45,11 @@ $(IMG_CACHE): latest
 
 .PHONY: docker-compose-test/%
 docker-compose-test/%: $(IMG_CACHE)
+	$(DEPS) \
 	USER_ID=$(shell id -u) \
 	GROUP_ID=$(shell id -g) \
 	BASE_IMG=golang:1.21$(BASE_IMG) \
 	IMG_CACHE=$(shell basename $(IMG_CACHE)) \
-	POSTGIS_VERSION=3.3.4 \
 		docker compose -f test.yml up --build --force-recreate --abort-on-container-exit --exit-code-from test
 	docker compose -f test.yml down --remove-orphans --volumes
 
@@ -64,7 +72,7 @@ versions: Makefile go.mod
 #		> $(@)
 
 define pull_or_build
-	docker pull $(1) || (docker build -t $(1) $(2) && docker push $(1))
+	docker pull $(1) || (docker build -t $(1) $(foreach v,$(DEPS),--build-arg $(v)) $(2) && docker push $(1))
 endef
 
 img_of = $(IMG):$(strip $(1))-$(strip $(2))-$(shell find $(1) -type f | sort | xargs cat | md5sum | cut -d' ' -f1)
@@ -73,7 +81,6 @@ DEBIAN_BASE := $(call img_of, debian, base)
 ALPINE_BASE := $(call img_of, alpine, base)
 
 .PHONY: debian
-debian: versions
 debian: $(foreach v,$(shell cat versions),debian/jar/$(v))
 
 .PHONY: debian/base
@@ -93,7 +100,6 @@ debian/jar/%: debian/postgres/%
 	docker run --rm -u $(shell id -u):$(shell id -g) -v $(OUT):/out $(call img_of, debian, $(@F))
 
 .PHONY: alpine
-alpine: versions
 alpine: $(foreach v,$(shell cat versions),alpine/jar/$(v))
 
 .PHONY: alpine/base

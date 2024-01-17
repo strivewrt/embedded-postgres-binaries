@@ -13,7 +13,7 @@ jobs:
           with:
             username: strivewrt
             password: ${{secrets.DOCKERHUB_TOKEN}}
-        - name: Query Versions
+        - name: Collect Versions
           run: make versions
         - name: Build, Test, Publish
           run: |
